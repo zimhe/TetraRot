@@ -10,7 +10,8 @@ public class TetraBot : MonoBehaviour
     private List<Transform> _vertexs=new List<Transform>();
 
 
-    Dictionary<TetraBot,List<TetraEdge>> _sharedBotEdgeDic=new Dictionary<TetraBot, List<TetraEdge>>(4);
+    public readonly Dictionary<TetraBot,List<TetraEdge>> _sharedBotEdgeDic=new Dictionary<TetraBot, List<TetraEdge>>(4);
+    public readonly Dictionary<TetraBot,List<Transform>> _movablePoints=new Dictionary<TetraBot, List<Transform>>();
 
     public TetraEdge GetSharedEdge(TetraBot nb, int edgeIndex)
     {
@@ -19,7 +20,7 @@ public class TetraBot : MonoBehaviour
         return _sharedBotEdgeDic[nb][i];
     }
 
-   public  List<Transform>MovablePoints=new List<Transform>();
+   
 
 
         List<TetraEdge> Edges=new List<TetraEdge>();
@@ -94,21 +95,24 @@ public class TetraBot : MonoBehaviour
     {
         var e = nb._sharedBotEdgeDic[this][edge];
 
-        var axis =transform.InverseTransformDirection( e.GetDirection());
+        var axis = e.GetDirection();
 
         var angle = GetAngle(fromPoint, toPoint, e);
 
         var center = e.GetCenter();
 
-        var from = fromPoint.position - center;
-        var to = toPoint.position - center;
+        var pivot = e.GetCenterXform();
+
+        transform.parent = pivot;
+
+        pivot.Rotate(axis,angle);
 
        // var q = transform.rotation.eulerAngles + Quaternion.AngleAxis(angle, axis).eulerAngles;
    
        //transform.SetPositionAndRotation();
 
+        transform.parent = pivot.parent.parent;
 
-        transform.Rotate(axis,angle,Space.Self);
     }
 
     public Vector3 GetDirection(int face, int vert)
@@ -153,88 +157,82 @@ public class TetraBot : MonoBehaviour
     //    return V
     //}
 
-    bool CloseEnough(Vector3 v0, Vector3 v1)
+    bool CloseEnoughEdge(Vector3 d0, Vector3 d1)
     {
-        if (Vector3.Distance(v0, v1) < 0.0001f)
+        bool close;
+
+        if (Vector3.Angle(d0,d1) < 0.0001f)
         {
-            return true;
+            close= true;
         }
         else
         {
-            return false;
+            close= false;
         }
+
+        return close;
+    }
+
+    bool CloseEnoughPoint(Transform v0, Transform v1)
+    {
+        bool close;
+        if (Vector3.Distance(v0.position, v1.position) < 0.0001f)
+        {
+            close= true;
+        }
+        else
+        {
+            close= false;
+        }
+        return close;
     }
 
     public void EvaluateNeighbor(TetraBot nb)
     {
+        if (_sharedBotEdgeDic.ContainsKey(nb) && nb._sharedBotEdgeDic.ContainsKey(this))
+        {
+            _sharedBotEdgeDic[nb] = new List<TetraEdge>();
+            nb._sharedBotEdgeDic[this] = new List<TetraEdge>();
+            _movablePoints[nb] = new List<Transform>();
+            nb._movablePoints[this] = new List<Transform>();
+        }
+    
+
         foreach (var e in Edges)
         {
             foreach (var en in nb.GetEdges())
             {
+                var ec = e.GetCenterXform();
+                var nc = en.GetCenterXform();
 
-                var es = e._start.position;
-                var ee = e._end.position;
-
-                var ns = en._start.position;
-                var ne = en._end.position;
-
-
-                if (CloseEnough(es,ns)&&CloseEnough(ee,ne)||CloseEnough(es,ne)&&CloseEnough(ee,ns))
+                if (CloseEnoughPoint(ec,nc))
                 {
+                    print("share");
                     AddSharedEdge(nb,e);
                     nb.AddSharedEdge(this,en);
-
-                }
-                if (!CloseEnough(es, ns) && !CloseEnough(ee, ne) && !CloseEnough(es, ne) && !CloseEnough(ee, ns))
-                {
-
-                    //if (_sharedBotEdgeDic.ContainsKey(nb))
-                    //{
-                    //    if (_sharedBotEdgeDic[nb].Contains(e))
-                    //    {
-                    //        _sharedBotEdgeDic[nb].Remove(e);
-                    //        print("remove");
-                    //    }
-                    //}
-                    //if (nb._sharedBotEdgeDic.ContainsKey(this))
-                    //{
-                    //    if (nb._sharedBotEdgeDic[this].Contains(en))
-                    //    {
-                    //        nb._sharedBotEdgeDic[this].Remove(en);
-                    //        print("remove nb");
-                    //    }
-                    //}
-
-                    if (MovablePoints.Contains(e._start) || MovablePoints.Contains(e._end))
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        MovablePoints.AddRange(e.GetPoints());
-                    }
-
-                    nb.MovablePoints.AddRange(en.GetPoints());
-                }
-
-            }
-
-            if (_sharedBotEdgeDic.ContainsKey(nb))
-            {
-                if (_sharedBotEdgeDic[nb].Count == 0)
-                {
-                    _sharedBotEdgeDic.Remove(nb);
-                }
-            }
-
-            if (nb._sharedBotEdgeDic.ContainsKey(this))
-            {
-                if (nb._sharedBotEdgeDic[this].Count == 0)
-                {
-                    _sharedBotEdgeDic.Remove(this);
                 }
             }
         }
+        foreach (var v in _vertexs)
+        {
+            foreach (var vn in nb._vertexs)
+            {
+                AddMovablePoints(nb, v);
+                nb.AddMovablePoints(this, vn);
+            }
+        }
+        foreach (var v in _vertexs)
+        {
+            foreach (var vn in nb._vertexs)
+            {
+                if (CloseEnoughPoint(v, vn))
+                {
+                    _movablePoints[nb].Remove(v);
+                    nb._movablePoints[this].Remove(vn);
+                }
+            }
+        }
+        print(_movablePoints[nb].Count);
     }
 
    
@@ -255,6 +253,20 @@ public class TetraBot : MonoBehaviour
       
     }
 
+    public void AddMovablePoints(TetraBot nb, Transform point)
+    {
+        if (!_movablePoints.ContainsKey(nb))
+        {
+            _movablePoints.Add(nb,new List<Transform>(){point});
+        }
+        else
+        {
+            if (!_movablePoints[nb].Contains(point))
+            {
+                _movablePoints[nb].Add(point);
+            }
+        }
+    }
 
 
 

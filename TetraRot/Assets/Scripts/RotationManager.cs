@@ -25,24 +25,30 @@ public class RotationManager : MonoBehaviour
 	{
 	    if (Input.GetKeyDown(KeyCode.Space))
 	    {
+            Evaluate();
+	    }
+
+	    if (Input.GetKeyDown(KeyCode.R))
+	    {
             Rotate();
 	    }
 	}
 
-    void Rotate()
+    void Evaluate()
     {
         Bots[0].EvaluateNeighbor(Bots[1]);
+    }
 
-        Bots[0].Rotate(Bots[1],0,Bots[0].MovablePoints[0],Bots[1].MovablePoints[1]);
+    void Rotate()
+    {
+        Bots[0].Rotate(Bots[1], 0, Bots[0]._movablePoints[Bots[1]][0], Bots[1]._movablePoints[Bots[0]][0]);
     }
    
 
 
    void  SetPosition()
    {
-    
 
-      
         for (int z = 0; z < CountZ; z++)
         {
             for (int x = 0; x < CountX; x++)
